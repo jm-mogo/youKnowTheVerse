@@ -1,12 +1,13 @@
 <script setup>
 import { ref, watch } from "vue";
-const booksLength = 66;
 
-const { dificulty, booksSpan } = defineProps([
+const { dificulty, booksSpan, books } = defineProps([
 	"dificulty",
 	"booksSpan",
 	"books",
 ]);
+
+const booksLength = 65;
 
 const bookId = ref(0);
 
@@ -32,15 +33,15 @@ const changeVisible = (isVisible = !visible.value) => {
 };
 
 const getBookNT = () => {
-	return getRandom(booksLength - 39) + 39 + 1;
+	return getRandom(booksLength - 39) + 39;
 };
 
 const getBookOT = () => {
-	return getRandom(booksLength - 27) + 1;
+	return getRandom(booksLength - 27);
 };
 
 const getBook = () => {
-	return getRandom(booksLength) + 1;
+	return getRandom(booksLength);
 };
 
 const getRandomBook = () => {
@@ -101,23 +102,33 @@ const checkAnswer = () => {
 watch(bookId, async () => {
 	if (bookId > 66 || bookId < 1) return;
 
-	try {
-		const response = await fetch(
-			`https://api.getbible.net/v2/valera/${bookId.value}.json`
-		);
-		changeVisible(false);
-		book.value = await response.json();
-	} catch (error) {
-		console.log(error);
-	}
+	const bookName = books[bookId.value].names[0];
+	const chapters = books[bookId.value].chapters;
+	const randomChapter = getRandom(chapters) + 1;
+
+	const response = await fetch(
+		`https://bible-api.deno.dev/api/read/rv1960/${bookName}/${randomChapter}`
+	);
+
+	const chapter = await response.json();
+
+	book.value.name = bookName;
+
+	const verse = chapter.vers[getRandom(chapter.vers.length)];
+	console.log(verse);
+	text.value = {
+		verse: verse.number,
+		chapter: randomChapter,
+		text: verse.verse,
+	};
 });
 
-watch(book, () => {
-	const chapterNumber = getRandom(book.value.chapters.length);
-	const chapter = book.value.chapters[chapterNumber];
-	const verseNumber = getRandom(chapter.verses.length);
-	text.value = chapter.verses[verseNumber];
-});
+// watch(book, () => {
+// 	const chapterNumber = getRandom(book.value.chapters.length);
+// 	const chapter = book.value.chapters[chapterNumber];
+// 	const verseNumber = getRandom(chapter.verses.length);
+// 	text.value = chapter.verses[verseNumber];
+// });
 
 getRandomBook();
 
@@ -188,7 +199,7 @@ const playAgain = () => {
 				</div>
 			</div>
 			<datalist id="verse-quote">
-				<option v-for="book in books" :value="book.name"></option>
+				<option v-for="book in books" :value="book.names[0]"></option>
 			</datalist>
 			<button class="btwShow" @click="changeVisible(), checkAnswer()">
 				Mostrar cita

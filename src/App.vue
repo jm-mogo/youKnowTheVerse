@@ -5,17 +5,16 @@ import MenuView from "./views/MenuView.vue";
 const dificulty = ref(1);
 const booksSpan = ref("new");
 const isMenu = ref(true);
-const books = ref({});
+const books = ref([]);
 
 const getAllBooks = async () => {
-	const response = await fetch(
-		"https://api.getbible.net/v2/valera/books.json"
-	);
+	const response = await fetch("https://bible-api.deno.dev/api/books");
 
 	books.value = await response.json();
 };
 
 getAllBooks();
+console.log(books);
 
 const updateDificulty = (event) => {
 	dificulty.value = Number(event.target.value);
@@ -33,6 +32,7 @@ const changeView = () => {
 <template>
 	<header>
 		<nav>
+			<div class="copy">&copy; 2025 j_mogo</div>
 			<button v-if="!isMenu" @click="changeView">Home</button>
 			<button v-else>Home</button>
 		</nav>
@@ -71,10 +71,11 @@ nav {
 	margin: auto;
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
+	justify-content: space-between;
 }
 
-nav button {
+nav button,
+.copy {
 	appearance: none;
 	border: none;
 	background: none;
