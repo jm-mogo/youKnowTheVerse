@@ -1,4 +1,5 @@
 <script setup>
+import { Analytics } from "@vercel/analytics/vue";
 import { ref } from "vue";
 import GameView from "./views/GameView.vue";
 import MenuView from "./views/MenuView.vue";
@@ -30,6 +31,7 @@ const changeView = () => {
 </script>
 
 <template>
+	<Analytics />
 	<header>
 		<nav>
 			<div class="copy">&copy; 2025 j_mogo</div>
