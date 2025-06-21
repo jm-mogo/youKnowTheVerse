@@ -34,7 +34,7 @@ const changeView = () => {
 		<Analytics />
 		<header>
 			<nav>
-				<div class="logo">BibleGuessr</div>
+				<div class="logo">Jm-mogo</div>
 				<button class="btn-header" @click="isMenu = true">Home</button>
 			</nav>
 		</header>
