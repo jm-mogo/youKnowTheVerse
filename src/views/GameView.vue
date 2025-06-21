@@ -1,7 +1,8 @@
 <script setup>
-import { ref, watch } from "vue";
+import { ref, watch, onUnmounted, computed } from "vue"; // NEW: Import computed
 
-const { dificulty, booksSpan, books } = defineProps([
+const props = defineProps([
+	// MODIFIED: Use `props` to avoid confusion in computed
 	"dificulty",
 	"booksSpan",
 	"books",
@@ -9,7 +10,12 @@ const { dificulty, booksSpan, books } = defineProps([
 
 const emit = defineEmits(["play-again"]);
 
-const booksLength = 65;
+// --- Constants ---
+const TIME_LIMIT = 30;
+const BOOKS_IN_OT = 39;
+const BOOKS_TOTAL = 66; // MODIFIED: Correct total number of books
+
+// --- State ---
 const bookId = ref(0);
 const lives = ref(3);
 const points = ref(0);
@@ -20,22 +26,70 @@ const verseGuess = ref("");
 const book = ref({});
 const text = ref({});
 const visible = ref(false);
-const isLoading = ref(true); // NEW: State to track loading status, true on init
+const isLoading = ref(true);
+const timerId = ref(null);
+const timeRemaining = ref(TIME_LIMIT);
 
+// --- NEW: Computed property to filter books for the dropdown ---
+const filteredBooks = computed(() => {
+	if (!props.books || props.books.length === 0) {
+		return [];
+	}
+	switch (props.booksSpan) {
+		case "new":
+			// New Testament books have an ID > 39 (index > 38)
+			return props.books.slice(BOOKS_IN_OT);
+		case "old":
+			// Old Testament books have an ID <= 39 (index <= 38)
+			return props.books.slice(0, BOOKS_IN_OT);
+		default: // 'both'
+			return props.books;
+	}
+});
+
+// --- Timer Logic ---
+const stopTimer = () => {
+	clearInterval(timerId.value);
+	timerId.value = null;
+};
+
+const handleTimeUp = () => {
+	stopTimer();
+	isAnswer.value = false;
+	lives.value--;
+	cleanInputs();
+	changeVisible(true);
+};
+
+const startTimer = () => {
+	stopTimer();
+	timeRemaining.value = TIME_LIMIT;
+	timerId.value = setInterval(() => {
+		if (timeRemaining.value > 0) {
+			timeRemaining.value--;
+		} else {
+			handleTimeUp();
+		}
+	}, 1000);
+};
+
+// --- Game Logic ---
 const getRandom = (number) => Math.floor(Math.random() * number);
 const changeVisible = (isVisible = !visible.value) =>
 	(visible.value = isVisible);
-const getBookNT = () => getRandom(booksLength - 39) + 39;
-const getBookOT = () => getRandom(booksLength - 27);
-const getBook = () => getRandom(booksLength);
+// MODIFIED: Corrected random book logic
+const getBookNT = () => getRandom(BOOKS_TOTAL - BOOKS_IN_OT) + BOOKS_IN_OT;
+const getBookOT = () => getRandom(BOOKS_IN_OT);
+const getBook = () => getRandom(BOOKS_TOTAL);
 
 const getRandomBook = () => {
-	if (booksSpan == "new") bookId.value = getBookNT();
-	else if (booksSpan == "old") bookId.value = getBookOT();
+	if (props.booksSpan == "new") bookId.value = getBookNT();
+	else if (props.booksSpan == "old") bookId.value = getBookOT();
 	else bookId.value = getBook();
 };
 
 const nextVerse = () => {
+	stopTimer();
 	getRandomBook();
 	changeVisible(false);
 };
@@ -47,11 +101,12 @@ const cleanInputs = () => {
 };
 
 const checkAnswer = () => {
+	stopTimer();
 	let isCorrect = false;
 	const correctBook = book.value.name.toLowerCase().trim();
 	const guessBook = bookGuess.value.toLowerCase().trim();
 
-	switch (dificulty) {
+	switch (props.dificulty) {
 		case 1:
 			isCorrect = correctBook === guessBook;
 			break;
@@ -73,20 +128,26 @@ const checkAnswer = () => {
 		points.value++;
 	} else {
 		isAnswer.value = false;
-		lives.value--;
+		if (timeRemaining.value > 0) {
+			lives.value--;
+		}
 	}
 	cleanInputs();
 	changeVisible(true);
 };
 
-// MODIFIED: Watcher now handles the isLoading state
 watch(bookId, async () => {
-	if (bookId > 66 || bookId < 1 || books.length === 0) return;
-
-	isLoading.value = true; // START loading spinner
+	if (
+		bookId.value > BOOKS_TOTAL ||
+		bookId.value < 0 ||
+		props.books.length === 0
+	)
+		return;
+	isLoading.value = true;
+	stopTimer();
 
 	try {
-		const bookData = books[bookId.value];
+		const bookData = props.books[bookId.value];
 		const bookName = bookData.names[0];
 		const randomChapter = getRandom(bookData.chapters) + 1;
 		const response = await fetch(
@@ -102,12 +163,12 @@ watch(bookId, async () => {
 		};
 	} catch (error) {
 		console.error("Failed to fetch verse:", error);
-		// Optionally, you could set an error message here
 		text.value = {
 			text: "No se pudo cargar el versículo. Inténtalo de nuevo.",
 		};
 	} finally {
-		isLoading.value = false; // STOP loading spinner, always
+		isLoading.value = false;
+		startTimer();
 	}
 });
 
@@ -116,6 +177,10 @@ getRandomBook();
 const playAgain = () => {
 	emit("play-again");
 };
+
+onUnmounted(() => {
+	stopTimer();
+});
 </script>
 
 <template>
@@ -149,19 +214,28 @@ const playAgain = () => {
 			</p>
 		</div>
 
-		<!-- MODIFIED: Container to hold either the spinner or the verse -->
+		<div v-if="!visible && !isLoading" class="timer-bar-container">
+			<div
+				class="timer-bar-progress"
+				:class="{ 'is-low': timeRemaining <= 5 }"
+				:style="{ width: (timeRemaining / TIME_LIMIT) * 100 + '%' }"
+			></div>
+		</div>
+
 		<div class="verse-container">
 			<div v-if="isLoading" class="spinner"></div>
 			<p v-else class="verse">“{{ text.text }}”</p>
 		</div>
 
-		<!-- The rest of the template remains the same... -->
 		<div class="result-container" v-show="visible">
 			<div
 				class="result"
 				:class="{ correct: isAnswer, incorrect: !isAnswer }"
 			>
-				<strong>{{ isAnswer ? "¡Correcto!" : "¡Incorrecto!" }}</strong>
+				<strong v-if="timeRemaining.value > 0">{{
+					isAnswer ? "¡Correcto!" : "¡Incorrecto!"
+				}}</strong>
+				<strong v-else>¡Se acabó el tiempo!</strong>
 				<span
 					>La cita era: {{ book.name }} {{ text.chapter }}:{{
 						text.verse
@@ -180,13 +254,17 @@ const playAgain = () => {
 		>
 			<div class="inputs-grid">
 				<label for="name-guess">Libro</label>
-				<input
-					v-model="bookGuess"
-					list="verse-quote"
-					id="name-guess"
-					name="name-guess"
-					required
-				/>
+				<!-- MODIFIED: Replaced input with a select dropdown -->
+				<select v-model="bookGuess" id="name-guess" required>
+					<option value="" disabled>-- Selecciona un libro --</option>
+					<option
+						v-for="book in filteredBooks"
+						:key="book.id"
+						:value="book.names[0]"
+					>
+						{{ book.names[0] }}
+					</option>
+				</select>
 
 				<template v-if="dificulty >= 2">
 					<label for="chapter-guess">Capítulo</label>
@@ -210,20 +288,14 @@ const playAgain = () => {
 					/>
 				</template>
 			</div>
-
-			<datalist id="verse-quote">
-				<option
-					v-for="book in books"
-					:key="book.id"
-					:value="book.names[0]"
-				></option>
-			</datalist>
+			<!-- REMOVED: Datalist is no longer needed -->
 			<button class="btn btn-primary" type="submit">Comprobar</button>
 		</form>
 	</div>
 </template>
 
 <style scoped>
+/* All existing styles are the same */
 .game-card {
 	background: #ffffff;
 	max-width: 700px;
@@ -237,7 +309,6 @@ const playAgain = () => {
 	gap: 1.5rem;
 }
 
-/* --- Info Bar --- */
 .info-bar {
 	width: 100%;
 	display: flex;
@@ -248,14 +319,33 @@ const playAgain = () => {
 	padding-bottom: 1rem;
 	border-bottom: 1px solid #ecf0f1;
 }
+
 .info-value {
 	font-weight: 700;
 	color: #2c3e50;
 }
 
-/* --- NEW: Verse container and Spinner Styles --- */
+.timer-bar-container {
+	width: 100%;
+	height: 10px;
+	background-color: #ecf0f1;
+	border-radius: 5px;
+	overflow: hidden;
+}
+
+.timer-bar-progress {
+	height: 100%;
+	background-color: #3498db;
+	border-radius: 5px;
+	transition: width 1s linear, background-color 0.5s;
+}
+
+.timer-bar-progress.is-low {
+	background-color: #e74c3c;
+}
+
 .verse-container {
-	min-height: 120px; /* Give it a fixed height to prevent layout shifts */
+	min-height: 120px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -265,8 +355,8 @@ const playAgain = () => {
 .spinner {
 	width: 50px;
 	height: 50px;
-	border: 5px solid #ecf0f1; /* Light grey */
-	border-top-color: #3498db; /* Primary blue */
+	border: 5px solid #ecf0f1;
+	border-top-color: #3498db;
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
 }
@@ -277,7 +367,6 @@ const playAgain = () => {
 	}
 }
 
-/* --- The Verse --- */
 .verse {
 	font-family: "Lora", serif;
 	font-style: italic;
@@ -288,7 +377,6 @@ const playAgain = () => {
 	max-width: 90%;
 }
 
-/* --- Form and Inputs --- */
 .form {
 	width: 100%;
 	display: flex;
@@ -308,21 +396,25 @@ const playAgain = () => {
 	font-weight: 500;
 	text-align: right;
 }
-.inputs-grid input {
+/* MODIFIED: Consistent styling for both input and select */
+.inputs-grid input,
+.inputs-grid select {
 	width: 100%;
 	padding: 12px 15px;
 	border: 1px solid #bdc3c7;
 	border-radius: 6px;
 	font-size: 1rem;
+	font-family: "Inter", sans-serif;
+	background-color: white;
 	transition: border-color 0.3s, box-shadow 0.3s;
 }
-.inputs-grid input:focus {
+.inputs-grid input:focus,
+.inputs-grid select:focus {
 	outline: none;
 	border-color: #3498db;
 	box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
 }
 
-/* --- Result Feedback --- */
 .result-container {
 	width: 100%;
 	display: flex;
@@ -355,7 +447,6 @@ const playAgain = () => {
 	color: #c0392b;
 }
 
-/* --- Game Over Screen --- */
 .game-over-title {
 	font-family: "Lora", serif;
 	font-size: 2.2rem;
