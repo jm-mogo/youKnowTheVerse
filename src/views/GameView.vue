@@ -5,17 +5,24 @@ const props = defineProps(["dificulty", "booksSpan", "books"]);
 const emit = defineEmits(["play-again"]);
 
 // --- Constants ---
-const TIME_LIMIT = 30; // UPDATED as per your note
+const TIME_LIMIT = 30;
 const BOOKS_IN_OT = 39;
 const BOOKS_TOTAL = 66;
-const STREAK_GOAL = 2; // NEW: Define the streak goal as a constant
+const STREAK_GOAL = 2;
 
-// --- State ---
+// NEW: Helper map to display the book span name
+const booksSpanMap = {
+	new: "Nuevo Testamento",
+	old: "Antiguo Testamento",
+	both: "Ambos Testamentos",
+};
+
+// --- State and other logic... (remains the same) ---
 const bookId = ref(0);
 const lives = ref(3);
 const points = ref(0);
-const streak = ref(0); // NEW: To track consecutive correct answers
-const extraLifeMessage = ref(""); // NEW: To hold the +1 life message
+const streak = ref(0);
+const extraLifeMessage = ref("");
 const isAnswer = ref(false);
 const bookGuess = ref("");
 const chapterGuess = ref("");
@@ -39,15 +46,14 @@ const filteredBooks = computed(() => {
 	}
 });
 
-// --- Timer Logic ---
 const stopTimer = () => {
 	clearInterval(timerId.value);
 	timerId.value = null;
 };
 const handleTimeUp = () => {
 	stopTimer();
-	streak.value = 0; // MODIFIED: Reset streak on timeout
-	extraLifeMessage.value = ""; // MODIFIED: Clear message on timeout
+	streak.value = 0;
+	extraLifeMessage.value = "";
 	isAnswer.value = false;
 	lives.value--;
 	cleanInputs();
@@ -62,7 +68,6 @@ const startTimer = () => {
 	}, 1000);
 };
 
-// --- Game Logic ---
 const getRandom = (number) => Math.floor(Math.random() * number);
 const changeVisible = (isVisible = !visible.value) =>
 	(visible.value = isVisible);
@@ -78,7 +83,7 @@ const nextVerse = () => {
 	stopTimer();
 	getRandomBook();
 	changeVisible(false);
-	extraLifeMessage.value = ""; // MODIFIED: Clear message on next verse
+	extraLifeMessage.value = "";
 };
 const cleanInputs = () => {
 	bookGuess.value = "";
@@ -87,8 +92,7 @@ const cleanInputs = () => {
 };
 const checkAnswer = () => {
 	stopTimer();
-	extraLifeMessage.value = ""; // Clear any previous message
-
+	extraLifeMessage.value = "";
 	const scoreMap = { 1: 1, 2: 2, 3: 4 };
 	let isCorrect = false;
 	const correctBook = book.value.name.toLowerCase().trim();
@@ -109,27 +113,23 @@ const checkAnswer = () => {
 				text.value.verse == verseGuess.value;
 			break;
 	}
-
 	if (isCorrect) {
 		isAnswer.value = true;
 		points.value += scoreMap[props.dificulty];
-		streak.value++; // MODIFIED: Increment streak
-
-		// NEW: Check for streak reward
+		streak.value++;
 		if (streak.value === STREAK_GOAL) {
 			lives.value++;
 			extraLifeMessage.value = `¡Racha de ${STREAK_GOAL}! +1 Vida ❤️`;
-			streak.value = 0; // Reset streak after reward
+			streak.value = 0;
 		}
 	} else {
 		isAnswer.value = false;
-		streak.value = 0; // MODIFIED: Reset streak on incorrect answer
+		streak.value = 0;
 		if (timeRemaining.value > 0) lives.value--;
 	}
 	cleanInputs();
 	changeVisible(true);
 };
-
 const checkAndSaveHighScore = () => {
 	const currentHighScore =
 		Number(localStorage.getItem("bibleGuessrHighScore")) || 0;
@@ -137,7 +137,6 @@ const checkAndSaveHighScore = () => {
 		localStorage.setItem("bibleGuessrHighScore", points.value);
 	}
 };
-
 watch(lives, (newLives) => {
 	if (newLives < 0) checkAndSaveHighScore();
 });
@@ -175,7 +174,6 @@ watch(bookId, async () => {
 		startTimer();
 	}
 });
-
 getRandomBook();
 const playAgain = () => {
 	emit("play-again");
@@ -186,10 +184,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-	<!-- Game Over View (no changes) -->
+	<!-- MODIFIED: Game Over View -->
 	<div class="game-card" v-if="lives < 0">
 		<h2 class="game-over-title">Juego Terminado</h2>
 		<p class="final-score">Puntaje final: {{ points }}</p>
+
+		<!-- Game settings summary -->
 		<p class="final-info">
 			Dificultad:
 			{{
@@ -200,12 +200,25 @@ onUnmounted(() => {
 					: "Libro, capítulo y versículo"
 			}}
 		</p>
+		<p class="final-info">
+			Testamento: {{ booksSpanMap[props.booksSpan] }}
+		</p>
+
+		<!-- NEW: Last verse display section -->
+		<div class="last-verse-section">
+			<h4>La cita final fue:</h4>
+			<p class="last-verse-citation">
+				{{ book.name }} {{ text.chapter }}:{{ text.verse }}
+			</p>
+			<blockquote class="last-verse-text">“{{ text.text }}”</blockquote>
+		</div>
+
 		<button class="btn btn-primary" @click="playAgain">
 			Volver al Menú
 		</button>
 	</div>
 
-	<!-- Main Game View -->
+	<!-- Main Game View (No changes here) -->
 	<div class="game-card" v-else>
 		<div class="info-bar">
 			<p>
@@ -226,8 +239,6 @@ onUnmounted(() => {
 			<div v-if="isLoading" class="spinner"></div>
 			<p v-else class="verse">“{{ text.text }}”</p>
 		</div>
-
-		<!-- MODIFIED: Result container now includes the extra life message -->
 		<div class="result-container" v-show="visible">
 			<div
 				class="result"
@@ -235,9 +246,8 @@ onUnmounted(() => {
 			>
 				<strong v-if="timeRemaining > 0">{{
 					isAnswer ? "¡Correcto!" : "¡Incorrecto!"
-				}}</strong>
-				<strong v-else>¡Se acabó el tiempo!</strong>
-				<!-- NEW: Extra Life Message Display -->
+				}}</strong
+				><strong v-else>¡Se acabó el tiempo!</strong>
 				<div v-if="extraLifeMessage" class="extra-life-msg">
 					{{ extraLifeMessage }}
 				</div>
@@ -251,8 +261,6 @@ onUnmounted(() => {
 				Siguiente Versículo
 			</button>
 		</div>
-
-		<!-- Form (no changes) -->
 		<form
 			class="form"
 			v-show="!visible && !isLoading"
@@ -293,7 +301,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Most styles are the same, just adding one new rule */
+/* Most styles are the same, just adding new rules at the end */
 .game-card {
 	background: #fff;
 	max-width: 700px;
@@ -432,6 +440,26 @@ onUnmounted(() => {
 	border-color: #e74c3c;
 	color: #c0392b;
 }
+.extra-life-msg {
+	font-weight: 700;
+	color: #16a085;
+	background-color: #d1f2eb;
+	padding: 8px 12px;
+	border-radius: 6px;
+	margin-top: 12px;
+	margin-bottom: 8px;
+	animation: fadeIn 0.5s ease-in-out;
+}
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
 .game-over-title {
 	font-family: "Lora", serif;
 	font-size: 2.2rem;
@@ -443,28 +471,44 @@ onUnmounted(() => {
 }
 .final-info {
 	color: #7f8c8d;
+	margin-top: -1.2rem;
+}
+.final-info:first-of-type {
+	margin-top: 0;
 }
 
-/* NEW: Style for the extra life message */
-.extra-life-msg {
+/* NEW: Styles for the last verse section on the Game Over screen */
+.last-verse-section {
+	width: 100%;
+	border-top: 1px solid #ecf0f1;
+	padding-top: 1.5rem;
+	margin-top: 0.5rem;
+	text-align: center;
+}
+
+.last-verse-section h4 {
 	font-weight: 700;
-	color: #16a085; /* A vibrant green-teal color */
-	background-color: #d1f2eb;
-	padding: 8px 12px;
-	border-radius: 6px;
-	margin-top: 12px;
-	margin-bottom: 8px;
-	animation: fadeIn 0.5s ease-in-out;
+	font-size: 1.1rem;
+	color: #2c3e50;
+	margin-bottom: 0.5rem;
 }
 
-@keyframes fadeIn {
-	from {
-		opacity: 0;
-		transform: translateY(-10px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
+.last-verse-citation {
+	font-weight: 500;
+	color: #34495e;
+	margin-bottom: 1rem;
+}
+
+.last-verse-text {
+	font-family: "Lora", serif;
+	font-style: italic;
+	font-size: 1.2rem;
+	line-height: 1.6;
+	color: #7f8c8d;
+	background-color: #f8f9f9;
+	padding: 1rem;
+	border-left: 4px solid #bdc3c7;
+	margin: 0;
+	text-align: left;
 }
 </style>
